@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud CRM Digital Store</title>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <style>
+        :root { --primary: #4e73df; --success: #1cc88a; --danger: #e74a3b; --bg: #f8f9fc; }
+        body { font-family: 'Nunito', sans-serif; background: var(--bg); padding: 20px; margin: 0; }
+        .container { max-width: 1200px; margin: auto; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        input, select, button { padding: 12px; border: 1px solid #d1d3e2; border-radius: 8px; width: 100%; box-sizing: border-box; }
+        button { cursor: pointer; border: none; font-weight: bold; color: white; transition: 0.3s; }
+        .btn-add { background: var(--primary); }
+        .btn-stok { background: #36b9cc; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; border-radius: 10px; overflow: hidden; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #e3e6f0; }
+        th { background: #f8f9fc; color: #4e73df; }
+        .loading { text-align: center; padding: 20px; color: var(--primary); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 style="color: var(--primary);">☁️ Cloud CRM Digital Store</h2>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+        <div class="card"><h3>Omzet</h3><p id="statOmzet">Rp 0</p></div>
+        <div class="card"><h3>Profit</h3><p id="statProfit" style="color: var(--success);">Rp 0</p></div>
+        <div class="card"><h3>Akun Ready</h3><p id="statStok" style="color: #36b9cc;">0</p></div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <!-- Form Transaksi -->
+        <div class="card">
+            <h3>Input Penjualan</h3>
+            <div class="form-grid">
+                <input type="text" id="nama" placeholder="Nama Pembeli">
+                <input type="text" id="produk" placeholder="Nama Produk (Sesuai Stok)">
+                <input type="number" id="jual" placeholder="Harga Jual (Rp)">
+                <input type="number" id="modal" placeholder="Harga Modal (Rp)">
+                <input type="date" id="exp" title="Exp Date">
+                <select id="platform">
+                    <option value="WhatsApp">WhatsApp</option>
+                    <option value="Instagram">Instagram</option>
+                </select>
+                <button class="btn-add" onclick="saveTransaction()" style="grid-column: span 2;">SIMPAN KE CLOUD</button>
+            </div>
+        </div>
+
+        <!-- Stok -->
+        <div class="card">
+            <h3>Update Stok</h3>
+            <div class="form-grid">
+                <input type="text" id="sNama" placeholder="Nama Produk">
+                <input type="number" id="sJml" placeholder="Jumlah Tambah">
+                <button class="btn-stok" onclick="updateStock()" style="grid-column: span 2;">TAMBAH STOK</button>
+            </div>
+            <div id="listStok" style="margin-top: 15px; font-size: 14px;"></div>
+        </div>
+    </div>
+
+    <div id="loader" class="loading">Menghubungkan ke Database...</div>
+
+    <div class="card">
+        <h3>Riwayat Penjualan Real-time</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Pelanggan</th>
+                    <th>Produk</th>
+                    <th>Profit</th>
+                    <th>Status</th>
+                    <th>Aksi</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // === KONFIGURASI FIREBASE ANDA ===
+    const firebaseConfig = {
+        apiKey: "AIzaSyBXYEp5UixhbtyjwnqmaVQX1a1yQz7Res0",
+        authDomain: "crm-deka.firebaseapp.com",
+        projectId: "crm-deka",
+        storageBucket: "crm-deka.firebasestorage.app",
+        messagingSenderId: "930670861746",
+        appId: "1:930670861746:web:de8fa209f6262d70fe58ab"
+    };
+    // =================================
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const formatRp = (n) => "Rp " + n.toLocaleString('id-ID');
+
+    // 1. Simpan Transaksi & Kurangi Stok Otomatis
+    async function saveTransaction() {
+        const data = {
+            nama: document.getElementById('nama').value,
+            produk: document.getElementById('produk').value,
+            jual: parseInt(document.getElementById('jual').value) || 0,
+            modal: parseInt(document.getElementById('modal').value) || 0,
+            exp: document.getElementById('exp').value,
+            platform: document.getElementById('platform').value,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        if(!data.nama || !data.produk) return alert("Isi data!");
+
+        try {
+            await db.collection("sales").add(data);
+            // Kurangi Stok
+            const stokRef = db.collection("inventory").doc(data.produk.toLowerCase());
+            const doc = await stokRef.get();
+            if(doc.exists) {
+                await stokRef.update({ jml: firebase.firestore.FieldValue.increment(-1) });
+            }
+            alert("Data tersimpan!");
+            document.querySelectorAll('input').forEach(i => i.value = "");
+        } catch (e) { alert("Error: " + e); }
+    }
+
+    // 2. Update Stok
+    async function updateStock() {
+        const nama = document.getElementById('sNama').value.toLowerCase();
+        const jml = parseInt(document.getElementById('sJml').value) || 0;
+        await db.collection("inventory").doc(nama).set({
+            nama: nama,
+            jml: firebase.firestore.FieldValue.increment(jml)
+        }, { merge: true });
+        alert("Stok diupdate!");
+    }
+
+    // 3. Listener Real-time (Data Update Otomatis Tanpa Refresh)
+    function listenData() {
+        // Sales Listener
+        db.collection("sales").orderBy("timestamp", "desc").onSnapshot(snapshot => {
+            let html = '', omzet = 0, profit = 0;
+            snapshot.forEach(doc => {
+                const s = doc.data();
+                const p = s.jual - s.modal;
+                omzet += s.jual; profit += p;
+                html += `<tr>
+                    <td><b>${s.nama}</b></td>
+                    <td>${s.produk}</td>
+                    <td>${formatRp(p)}</td>
+                    <td>${s.exp}</td>
+                    <td><button onclick="deleteDoc('${doc.id}')" style="background:var(--danger); padding:5px;">X</button></td>
+                </tr>`;
+            });
+            document.getElementById('tableBody').innerHTML = html;
+            document.getElementById('statOmzet').innerText = formatRp(omzet);
+            document.getElementById('statProfit').innerText = formatRp(profit);
+            document.getElementById('loader').style.display = 'none';
+        });
+
+        // Inventory Listener
+        db.collection("inventory").onSnapshot(snapshot => {
+            let html = '<strong>Sisa Stok:</strong><br>', totalStok = 0;
+            snapshot.forEach(doc => {
+                const i = doc.data();
+                totalStok += i.jml;
+                html += `• ${i.nama.toUpperCase()}: ${i.jml} akun<br>`;
+            });
+            document.getElementById('listStok').innerHTML = html;
+            document.getElementById('statStok').innerText = totalStok;
+        });
+    }
+
+    function deleteDoc(id) {
+        if(confirm("Hapus data?")) db.collection("sales").doc(id).delete();
+    }
+
+    listenData();
+</script>
+</body>
+</html>
