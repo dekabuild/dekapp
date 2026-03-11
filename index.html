@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dekapp Temp Mail</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; color: #333; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { max-width: 600px; width: 100%; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; margin-bottom: 20px; }
+        h1 { margin-top: 0; color: #2563eb; }
+        
+        /* Desain untuk Pilihan Domain */
+        .domain-selector { margin: 15px 0; }
+        select { padding: 10px; border-radius: 6px; border: 2px solid #93c5fd; font-size: 1rem; font-weight: bold; color: #1e40af; cursor: pointer; outline: none; background: #f8fafc; }
+        select:focus { border-color: #2563eb; }
+
+        .email-box { background: #e0e7ff; padding: 15px; border-radius: 8px; font-size: 1.2rem; font-weight: bold; margin: 10px 0 20px 0; color: #1e40af; border: 2px dashed #93c5fd; word-break: break-all; }
+        button { background: #2563eb; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 1rem; transition: 0.2s; }
+        button:hover { background: #1d4ed8; }
+        
+        .inbox { width: 100%; max-width: 600px; }
+        .email-item { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: left; border-left: 4px solid #2563eb; }
+        .email-header { font-weight: bold; margin-bottom: 5px; font-size: 0.9rem; color: #4b5563; }
+        .email-subject { font-size: 1.1rem; color: #111; margin-bottom: 10px; }
+        
+        .btn-read { background: #10b981; margin-right: 5px; }
+        .btn-read:hover { background: #059669; }
+        .btn-delete { background: #ef4444; }
+        .btn-delete:hover { background: #dc2626; }
+        
+        #email-content { display: none; background: white; padding: 20px; border-radius: 8px; max-width: 600px; width: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: left; overflow-x: auto;}
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>✉️ Dekapp Temp Mail</h1>
+        <p>Alamat email sementara kamu siap digunakan!</p>
+        
+        <div class="domain-selector">
+            <select id="domain-select" onchange="generateNewEmail()">
+                <option value="@dekapp.web.id">@dekapp.web.id</option>
+                <option value="@dekastore.net">@dekastore.net</option>
+            </select>
+        </div>
+
+        <div class="email-box" id="email-address">Memuat...</div>
+        
+        <div>
+            <button onclick="copyEmail()">📋 Salin Email</button>
+            <button onclick="generateNewEmail()" style="background: #6b7280; margin-left: 5px;">🔄 Ganti Acak</button>
+        </div>
+    </div>
+
+    <div class="inbox" id="inbox-list">
+        <div style="text-align: center; color: #6b7280;">Menunggu email masuk... (Otomatis refresh tiap 5 detik)</div>
+    </div>
+
+    <div id="email-content">
+        <button onclick="closeEmail()" style="margin-bottom: 15px; background: #6b7280;">⬅ Kembali ke Inbox</button>
+        <div id="email-body"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
