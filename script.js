@@ -1,119 +1,131 @@
-// --- KONFIGURASI API & DOMAIN ---
+// ==========================================
+// 1. KONFIGURASI & VARIABEL GLOBAL
+// ==========================================
 const API_URL = "https://temp-mail-api-ejv.cintyajin.workers.dev/emails";
+const DOMAINS = ["@dekapp.web.id", "@dekastore.net"];
 
-// Daftar domain yang didukung
-const AVAILABLE_DOMAINS = ["@dekapp.web.id", "@dekastore.net"];
+// Ambil elemen DOM sekali di awal agar lebih cepat (Performa lebih baik)
+const elEmail = document.getElementById("temp-email");
+const elDomain = document.getElementById("domain-select");
+const elInbox = document.getElementById("inbox-list");
+const elCountdown = document.getElementById("countdown-text");
+const elModal = document.getElementById("email-modal");
+const elToast = document.getElementById("toast");
 
-let currentEmail = localStorage.getItem("my_temp_email");
+let currentEmail = localStorage.getItem("temp_email") || "";
+let countdown = 10;
 
-// Fungsi membuat email acak baru berdasarkan domain yang dipilih
+// ==========================================
+// 2. INISIALISASI (Dijalankan saat web dibuka)
+// ==========================================
+window.onload = () => {
+    // Jika tidak ada email tersimpan atau domain tidak valid, buat baru
+    if (!currentEmail || !DOMAINS.some(d => currentEmail.endsWith(d))) {
+        generateNewEmail();
+    } else {
+        elEmail.value = currentEmail;
+        elDomain.value = DOMAINS.find(d => currentEmail.endsWith(d));
+        fetchInbox();
+    }
+    // Mulai hitung mundur otomatis
+    setInterval(updateTimer, 1000);
+};
+
+// ==========================================
+// 3. FUNGSI UTAMA (Sederhana & Langsung ke Tujuan)
+// ==========================================
+
 function generateNewEmail() {
-    const selectedDomain = document.getElementById("domain-select").value;
-    const randomString = Math.random().toString(36).substring(2, 10);
+    // Buat 8 karakter acak + domain yang dipilih
+    currentEmail = Math.random().toString(36).substring(2, 10) + elDomain.value;
+    localStorage.setItem("temp_email", currentEmail);
+    elEmail.value = currentEmail;
     
-    currentEmail = randomString + selectedDomain;
-    localStorage.setItem("my_temp_email", currentEmail);
+    // Reset tampilan
+    elInbox.innerHTML = `<div class="empty-state"><p>Menyiapkan alamat baru...</p></div>`;
+    refreshInbox();
+}
+
+function copyEmail() {
+    elEmail.select();
+    navigator.clipboard.writeText(currentEmail);
     
-    document.getElementById("email-address").innerText = currentEmail;
-    
-    // Tampilkan status loading di inbox saat ganti email
-    document.getElementById("inbox-list").innerHTML = `<div style="text-align: center; color: #6b7280;">Menunggu email masuk ke ${currentEmail}...</div>`;
+    // Tampilkan notifikasi Toast
+    elToast.innerText = "Email berhasil disalin!";
+    elToast.style.display = "block";
+    setTimeout(() => elToast.style.display = "none", 3000);
+}
+
+function updateTimer() {
+    countdown--;
+    elCountdown.innerText = `Update dalam ${countdown}s`;
+    if (countdown <= 0) refreshInbox();
+}
+
+function refreshInbox() {
+    countdown = 10; // Reset waktu setiap kali refresh dipanggil
     fetchInbox();
 }
 
-// Cek email saat halaman pertama kali dimuat
-if (!currentEmail) {
-    generateNewEmail();
-} else {
-    // Cek apakah email yang tersimpan menggunakan domain yang valid
-    const isValidDomain = AVAILABLE_DOMAINS.some(domain => currentEmail.endsWith(domain));
-    
-    if (!isValidDomain) {
-        generateNewEmail();
-    } else {
-        document.getElementById("email-address").innerText = currentEmail;
-        
-        // Sesuaikan pilihan dropdown dengan domain email yang sedang aktif
-        const currentDomain = AVAILABLE_DOMAINS.find(domain => currentEmail.endsWith(domain));
-        if (currentDomain) {
-            document.getElementById("domain-select").value = currentDomain;
-        }
-    }
-}
+// ==========================================
+// 4. KOMUNIKASI API (Data Fetching)
+// ==========================================
 
-// Fungsi menyalin email
-function copyEmail() {
-    navigator.clipboard.writeText(currentEmail);
-    alert("Email disalin: " + currentEmail);
-}
-
-// Fungsi mengambil daftar email
 async function fetchInbox() {
     try {
-        const response = await fetch(`${API_URL}?address=${currentEmail}`);
-        const emails = await response.json();
-        
-        const inboxList = document.getElementById("inbox-list");
+        const res = await fetch(`${API_URL}?address=${currentEmail}`);
+        const emails = await res.json();
         
         if (emails.length === 0) {
-            inboxList.innerHTML = `<div style="text-align: center; color: #6b7280;">Kotak masuk kosong. Menunggu email...</div>`;
+            elInbox.innerHTML = `
+                <div class="empty-state">
+                    <p>Menunggu email masuk ke<br><b>${currentEmail}</b></p>
+                </div>`;
             return;
         }
 
-        inboxList.innerHTML = ""; // Bersihkan list
-        emails.forEach(email => {
-            inboxList.innerHTML += `
-                <div class="email-item">
-                    <div class="email-header">Dari: ${email.senderAddress}</div>
-                    <div class="email-subject">${email.subject}</div>
-                    <button class="btn-read" onclick="readEmail('${email.id}')">📖 Baca</button>
-                    <button class="btn-delete" onclick="deleteEmail('${email.id}')">🗑 Hapus</button>
+        // Render daftar email dengan cara yang jauh lebih bersih menggunakan map()
+        elInbox.innerHTML = emails.map(email => `
+            <div class="email-item" onclick="readEmail('${email.id}')" style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #2563eb; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #6b7280; margin-bottom: 5px;">
+                    <strong>${email.senderAddress}</strong>
+                    <span>${new Date(email.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                 </div>
-            `;
-        });
-    } catch (error) {
-        console.error("Gagal mengambil email:", error);
+                <div style="font-weight: 500; color: #111827;">${email.subject}</div>
+            </div>
+        `).join('');
+    } catch (err) {
+        console.error("Gagal memuat inbox", err);
     }
 }
 
-// Fungsi membaca isi email
-async function readEmail(emailId) {
+async function readEmail(id) {
+    // Siapkan Modal
+    elModal.style.display = "block";
+    document.getElementById("modal-loading").style.display = "block";
+    document.getElementById("modal-content-html").style.display = "none";
+    document.getElementById("modal-subject").innerText = "Memuat...";
+
     try {
-        const response = await fetch(`${API_URL}/${emailId}`);
-        const data = await response.json();
+        const res = await fetch(`${API_URL}/${id}`);
+        const data = await res.json();
         
-        document.getElementById("inbox-list").style.display = "none";
-        document.getElementById("email-content").style.display = "block";
+        document.getElementById("modal-subject").innerText = data.subject || "(Tanpa Subjek)";
+        document.getElementById("modal-sender").innerText = `Dari: ${data.senderAddress}`;
+        document.getElementById("modal-time").innerText = new Date(data.timestamp).toLocaleString();
         
-        const content = data.html ? data.html : `<pre style="white-space: pre-wrap;">${data.text}</pre>`;
-        document.getElementById("email-body").innerHTML = `
-            <h3>${data.subject}</h3>
-            <hr>
-            ${content}
-        `;
-    } catch (error) {
-        alert("Gagal memuat isi email!");
+        // Render isi email
+        const contentDiv = document.getElementById("modal-content-html");
+        contentDiv.innerHTML = data.html || `<pre style="white-space: pre-wrap; font-family: inherit;">${data.text}</pre>`;
+        
+        document.getElementById("modal-loading").style.display = "none";
+        contentDiv.style.display = "block";
+    } catch (err) {
+        document.getElementById("modal-subject").innerText = "Gagal memuat pesan";
+        document.getElementById("modal-loading").style.display = "none";
     }
 }
 
-// Fungsi kembali ke inbox
-function closeEmail() {
-    document.getElementById("inbox-list").style.display = "block";
-    document.getElementById("email-content").style.display = "none";
+function closeModal() {
+    elModal.style.display = "none";
 }
-
-// Fungsi menghapus email
-async function deleteEmail(emailId) {
-    if (!confirm("Yakin ingin menghapus email ini?")) return;
-    
-    try {
-        await fetch(`${API_URL}/${emailId}?address=${currentEmail}`, { method: "DELETE" });
-        fetchInbox(); 
-    } catch (error) {
-        alert("Gagal menghapus email!");
-    }
-}
-
-// Cek email baru setiap 5 detik
-setInterval(fetchInbox, 5000);
-fetchInbox();
